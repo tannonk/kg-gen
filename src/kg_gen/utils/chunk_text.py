@@ -92,7 +92,7 @@ def main():
     # Chunk the text
     result_chunks = chunk_text(text, max_chunk_size=args.max_chunk_size)
 
-    # Print or otherwise process the chunks
+    # Print the chunks
     for i, chunk in enumerate(result_chunks, start=1):
         print(f"--- Chunk {i} (length {len(chunk)}): ---")
         print(chunk)

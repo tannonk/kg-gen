@@ -1,7 +1,14 @@
+import logging
 from ..models import Graph
 import dspy
 from typing import Optional
 from pydantic import BaseModel
+from ..utils.logging_config import setup_logger, log_operation, ProgressTracker
+from ..utils.usage_tracker import usage_tracker
+import mlflow
+
+dspy.enable_logging()
+logging.getLogger("dspy").setLevel(logging.DEBUG)
 
 LOOP_N = 8 
 from typing import Literal
@@ -23,16 +30,24 @@ class Cluster(BaseModel):
   representative: str
   members: set[str]
 
-def cluster_items(dspy: dspy.dspy, items: set[str], item_type: ItemType = "entities", context: str = "") -> tuple[set[str], dict[str, set[str]]]:
+@mlflow.trace
+def cluster_items(dspy, items: set[str], item_type: ItemType = "entities", context: str = "", log_level: int|str = "INFO") -> tuple[set[str], dict[str, set[str]]]:
   """Returns item set and cluster dict mapping representatives to sets of items"""
+  
+  logger = setup_logger(f"kg_gen.clustering.{item_type}", log_level=log_level)
+  
+  logger.info(f"Starting {item_type} clustering with {len(items)} items")
+  logger.debug(f"Context: {context}")
   
   context = f"{item_type} of a graph extracted from source text." + context
   remaining_items = items.copy()
   clusters: list[Cluster] = []
   no_progress_count = 0
   
+  logger.debug(f"Starting iterative clustering with max {LOOP_N} loops")
   
   while len(remaining_items) > 0:
+    logger.debug(f"Clustering iteration: {len(remaining_items)} items remaining, {len(clusters)} clusters formed")
     
     ItemsLiteral = Literal[tuple(items)]
     
@@ -47,10 +62,15 @@ def cluster_items(dspy: dspy.dspy, items: set[str], item_type: ItemType = "entit
 
     extract = dspy.Predict(ExtractCluster)
     
-    suggested_cluster: set[ItemsLiteral] = set(extract(
-      items=remaining_items, 
-      context=context
-    ).cluster)
+    extract_result = extract(
+        items=remaining_items, 
+        context=context
+      )
+    
+    # Track usage with the global usage tracker
+    usage_tracker.track_usage(extract_result, logger=logger)
+    
+    suggested_cluster: set[ItemsLiteral] = set(extract_result.cluster)
     
     if len(suggested_cluster) > 0:
       ClusterLiteral = Literal[tuple(suggested_cluster)]
@@ -66,10 +86,15 @@ def cluster_items(dspy: dspy.dspy, items: set[str], item_type: ItemType = "entit
       
       validate = dspy.Predict(ValidateCluster)
       
-      validated_cluster = set(validate(
-        cluster=suggested_cluster, 
-        context=context
-      ).validated_items)
+      validate_result = validate(
+          cluster=suggested_cluster, 
+          context=context
+        )
+      
+      # Track usage with the global usage tracker
+      usage_tracker.track_usage(validate_result, logger=logger)
+      
+      validated_cluster: set[ItemsLiteral] = set(validate_result.validated_items)
       
       if len(validated_cluster) > 1:
         no_progress_count = 0
@@ -84,6 +109,8 @@ def cluster_items(dspy: dspy.dspy, items: set[str], item_type: ItemType = "entit
           members=validated_cluster
         ))
         remaining_items = {item for item in remaining_items if item not in validated_cluster}
+        
+        logger.debug(f"Created cluster '{representative}' with {len(validated_cluster)} members: {list(validated_cluster)}")
         continue
       
     no_progress_count += 1
@@ -92,6 +119,7 @@ def cluster_items(dspy: dspy.dspy, items: set[str], item_type: ItemType = "entit
       break
     
   if len(remaining_items) > 0:
+    logger.debug(f"Processing {len(remaining_items)} remaining items in batches of {BATCH_SIZE}")
     items_to_process = list(remaining_items) 
       
     for i in range(0, len(items_to_process), BATCH_SIZE):
@@ -122,8 +150,12 @@ def cluster_items(dspy: dspy.dspy, items: set[str], item_type: ItemType = "entit
         clusters=clusters,
         context=context
       )
-      cluster_reps = c_result.cluster_reps_that_items_belong_to  
       
+      # Track usage with the global usage tracker
+      usage_tracker.track_usage(c_result, logger=logger)
+      
+      cluster_reps = c_result.cluster_reps_that_items_belong_to
+
       # Map representatives to their cluster objects for easier lookup
       # Ensure cluster_map uses the most up-to-date list of clusters
       cluster_map = {c.representative: c for c in clusters}
@@ -167,8 +199,7 @@ def cluster_items(dspy: dspy.dspy, items: set[str], item_type: ItemType = "entit
 
           except Exception as e:
               # Handle potential errors during the validation call
-              # TODO: Add proper logging
-              print(f"Validation failed for item '{item}' potentially belonging to cluster '{target_cluster.representative}': {e}")
+              logger.warning(f"Validation failed for item '{item}' potentially belonging to cluster '{target_cluster.representative}': {e}")
               # Keep item_assignments[item] as None, indicating it needs a new cluster
 
         # Else (no valid target_cluster found for the suggested 'rep'): 
@@ -184,8 +215,7 @@ def cluster_items(dspy: dspy.dspy, items: set[str], item_type: ItemType = "entit
                   cluster_map[assigned_rep].members.add(item)
               else:
                   # This case should ideally not happen if logic is correct
-                  # TODO: Add logging for this unexpected state
-                  print(f"Error: Assigned representative '{assigned_rep}' not found in cluster_map for item '{item}'. Creating new cluster.")
+                  logger.error(f"Error: Assigned representative '{assigned_rep}' not found in cluster_map for item '{item}'. Creating new cluster.")
                   if item not in cluster_map: # Avoid creating if item itself is already a rep
                      new_cluster_items.add(item)
           else:
@@ -207,9 +237,20 @@ def cluster_items(dspy: dspy.dspy, items: set[str], item_type: ItemType = "entit
   final_clusters_dict = {c.representative: c.members for c in clusters}
   new_items = set(final_clusters_dict.keys()) # The set of representatives
   
+  # Log clustering results
+  total_clustered = sum(len(members) for members in final_clusters_dict.values())
+  compression_ratio = total_clustered / len(items) if len(items) > 0 else 0
+  
+  logger.info(
+    f"Clustering completed: {len(items)} -> {len(new_items)} items "
+    f"({len(final_clusters_dict)} clusters, {compression_ratio:.1%} compression)"
+  )
+  
   return new_items, final_clusters_dict
 
-def cluster_graph(dspy: dspy.dspy, graph: Graph, context: str = "") -> Graph:
+@mlflow.trace
+@log_operation("Graph Clustering") 
+def cluster_graph(dspy, graph: Graph, context: str = "", log_level: int|str = "INFO") -> Graph:
   """Cluster entities and edges in a graph, updating relations accordingly.
   
   Args:
@@ -220,11 +261,18 @@ def cluster_graph(dspy: dspy.dspy, graph: Graph, context: str = "") -> Graph:
   Returns:
       Graph with clustered entities and edges, updated relations, and cluster mappings
   """
+  logger = setup_logger("kg_gen.clustering", log_level=log_level)
+  
+  logger.info(f"Starting graph clustering: {len(graph.entities)} entities, {len(graph.edges)} edges, {len(graph.relations)} relations")
+  
   entities, entity_clusters = cluster_items(dspy, graph.entities, "entities", context)
   edges, edge_clusters = cluster_items(dspy, graph.edges, "edges", context)
-  
+  # edges, edge_clusters = graph.edges, {e: {e} for e in graph.edges} # Skip edge clustering for now
+
   # Update relations based on clusters
+  logger.debug("Updating relations based on entity and edge clusters")
   relations: set[tuple[str, str, str]] = set()
+  
   for s, p, o in graph.relations:
     # Look up subject in entity clusters
     if s not in entities:
@@ -261,10 +309,12 @@ if __name__ == "__main__":
   import os
   from ..kg_gen import KGGen
   
+  logger = setup_logger("kg_gen.clustering.example", "INFO", True)
+  
   model = "openai/gpt-4o"
   api_key = os.getenv("OPENAI_API_KEY")
   if not api_key:
-    print("Please set OPENAI_API_KEY environment variable")
+    logger.error("Please set OPENAI_API_KEY environment variable")
     exit(1)
 
   # Example with family relationships
@@ -295,7 +345,7 @@ if __name__ == "__main__":
   
   try: 
     clustered_graph = kg_gen.cluster(graph=graph)
-    print('Clustered graph:', clustered_graph)
+    logger.info(f'Clustered graph: {clustered_graph}')
     
   except Exception as e:
     raise ValueError(e)
