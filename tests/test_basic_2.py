@@ -1,7 +1,7 @@
-from src.kg_gen import KGGen 
+from kg_gen import KGGen 
 import os
 
-from tests.utils.visualize_kg import visualize
+from kg_gen.utils.visualize_kg import visualize
 
 if __name__ == "__main__":
   # Load environment variables
@@ -16,13 +16,13 @@ if __name__ == "__main__":
   # Generate individual graphs
   graph1 = kg.generate(
     input_data=text1,
-    model="openai/gpt-4o",
+    model="openai/gpt-4.1-nano-2025-04-14",
     context="Family relationships"
   )
   
   graph2 = kg.generate(
     input_data=text2, 
-    model="openai/gpt-4o",
+    model="openai/gpt-4.1-nano-2025-04-14",
     context="Family relationships"
   )
   
@@ -33,7 +33,7 @@ if __name__ == "__main__":
   clustered_graph = kg.cluster(
     combined_graph,
     context="Family relationships",
-    model="openai/gpt-4o",
+    model="openai/gpt-4.1-nano-2025-04-14",
     api_key=os.getenv("OPENAI_API_KEY")
   )
   

@@ -1,4 +1,4 @@
-from typing import Union, List, Dict, Optional
+from typing import Union, List, Dict, Optional, Any
 from openai import OpenAI
 
 from .steps._1_get_entities import get_entities
@@ -142,6 +142,8 @@ class KGGen:
     # ontology: Optional[List[Tuple[str, str, str]]] = None,
     output_folder: Optional[str] = None,
     max_tokens: int = None,
+    # New metadata parameter
+    additional_metadata: Optional[Dict[str, Any]] = None,
   ) -> Graph:
     """Generate a knowledge graph from input text or messages.
 
@@ -156,6 +158,7 @@ class KGGen:
         edge_labels: Valid edge label strings
         ontology: Valid node-edge-node structure tuples
         output_folder: Path to save partial progress
+        additional_metadata: Optional key-value metadata pairs (e.g., {'source': 'file.txt'})
 
     Returns:
         Generated knowledge graph
@@ -201,7 +204,14 @@ class KGGen:
           self.logger.info(f"Extracted {len(entities)} entities")
           
         with log_step("Relation Extraction", self.logger):
-          relations = get_relations(self.dspy, processed_input, entities, is_conversation=is_conversation, log_level=self.logger.level)
+          relations = get_relations(
+              self.dspy, 
+              processed_input, 
+              entities, 
+              is_conversation=is_conversation,
+              additional_metadata=additional_metadata,
+              log_level=self.logger.level
+          )
           self.logger.info(f"Extracted {len(relations)} relations")
       else:
         # Chunked processing
@@ -215,8 +225,23 @@ class KGGen:
         def process_chunk(chunk_idx_and_chunk):
           chunk_idx, chunk = chunk_idx_and_chunk
           self.logger.debug(f"Processing chunk {chunk_idx + 1}/{len(chunks)} ({len(chunk)} chars)")
+          
+          # Add chunk info to metadata
+          chunk_metadata = additional_metadata.copy() if additional_metadata else {}
+          if 'source' in chunk_metadata:
+              chunk_metadata['source'] = f"{chunk_metadata['source']}:chunk_{chunk_idx}"
+          else:
+              chunk_metadata['chunk_id'] = chunk_idx
+          
           chunk_entities = get_entities(self.dspy, chunk, is_conversation=is_conversation, log_level=self.logger.level)
-          chunk_relations = get_relations(self.dspy, chunk, chunk_entities, is_conversation=is_conversation, log_level=self.logger.level)
+          chunk_relations = get_relations(
+              self.dspy, 
+              chunk, 
+              chunk_entities, 
+              is_conversation=is_conversation,
+              additional_metadata=chunk_metadata,
+              log_level=self.logger.level
+          )
           return chunk_entities, chunk_relations
 
         # Process chunks in parallel using ThreadPoolExecutor
@@ -239,7 +264,7 @@ class KGGen:
       graph = Graph(
         entities = entities,
         relations = relations,
-        edges = {relation[1] for relation in relations}
+        edges = {relation.predicate for relation in relations}
       )
       
       log_graph_stats(graph, "Initial", self.logger)
@@ -258,7 +283,14 @@ class KGGen:
 
           graph_dict = {
             'entities': list(entities),
-            'relations': list(relations),
+            'relations': [
+                {
+                    'subject': r.subject,
+                    'predicate': r.predicate, 
+                    'object': r.object,
+                    'metadata': r.metadata.data
+                } for r in relations
+            ],
             'edges': list(graph.edges)
           }
 
@@ -320,50 +352,51 @@ class KGGen:
 
   def aggregate(self, graphs: list[Graph]) -> Graph:
     """
-    Aggregate multiple knowledge graphs into a single combined graph.
-    
-    Args:
-        graphs: List of Graph objects to combine
-        
-    Returns:
-        Single aggregated Graph object
+    Aggregate multiple knowledge graphs with intelligent metadata merging.
+    Relations with same (subject, predicate, object) are deduplicated with merged metadata.
     """
     with log_step("Graph Aggregation", self.logger):
-      self.logger.info(f"Aggregating {len(graphs)} graphs")
-      
-      # Initialize empty sets for combined graph
-      all_entities = set()
-      all_relations = set()
-      all_edges = set()
-
-      # Combine all graphs
-      for i, graph in enumerate(graphs):
-        entities_before = len(all_entities)
-        relations_before = len(all_relations) 
-        edges_before = len(all_edges)
+        self.logger.info(f"Aggregating {len(graphs)} graphs")
         
-        all_entities.update(graph.entities)
-        all_relations.update(graph.relations)
-        all_edges.update(graph.edges)
+        # Use dict for efficient duplicate detection and merging
+        relation_map = {}  # (subject, predicate, object) -> Relation
+        all_entities = set()
         
-        entities_added = len(all_entities) - entities_before
-        relations_added = len(all_relations) - relations_before
-        edges_added = len(all_edges) - edges_before
+        for i, graph in enumerate(graphs):
+            entities_before = len(all_entities)
+            relations_before = len(relation_map)
+            
+            all_entities.update(graph.entities)
+            
+            # Process relations with metadata merging
+            for relation in graph.relations:
+                key = (relation.subject, relation.predicate, relation.object)
+                if key in relation_map:
+                    # Merge metadata for duplicate relation
+                    relation_map[key] = relation_map[key].merge_metadata(relation)
+                    self.logger.debug(f"Merged metadata for relation: {key}")
+                else:
+                    relation_map[key] = relation
+            
+            entities_added = len(all_entities) - entities_before
+            relations_added = len(relation_map) - relations_before
+            
+            self.logger.debug(
+                f"Graph {i+1}: +{entities_added} entities, +{relations_added} unique relations"
+            )
         
-        self.logger.debug(
-          f"Graph {i+1}: +{entities_added} entities, "
-          f"+{relations_added} relations, +{edges_added} edges"
+        # Convert back to sets
+        all_relations = set(relation_map.values())
+        all_edges = {r.predicate for r in all_relations}
+        
+        aggregated_graph = Graph(
+            entities=all_entities,
+            relations=all_relations,
+            edges=all_edges
         )
-
-      # Create and return aggregated graph
-      aggregated_graph = Graph(
-        entities=all_entities,
-        relations=all_relations,
-        edges=all_edges
-      )
-      
-      log_graph_stats(aggregated_graph, "Aggregated", self.logger)
-      return aggregated_graph
+        
+        log_graph_stats(aggregated_graph, "Aggregated", self.logger)
+        return aggregated_graph
 
   def get_usage_stats(self) -> Dict[str, any]:
     """

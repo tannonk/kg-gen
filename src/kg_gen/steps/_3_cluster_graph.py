@@ -1,5 +1,5 @@
 import logging
-from ..models import Graph
+from ..models import Graph, Relation
 import dspy
 from typing import Optional, Literal
 from pydantic import BaseModel
@@ -296,9 +296,11 @@ def cluster_graph(
 
   # Update relations based on clusters
   logger.debug("Updating relations based on entity and edge clusters")
-  relations: set[tuple[str, str, str]] = set()
+  relations: set[Relation] = set()
   
-  for s, p, o in graph.relations:
+  for relation in graph.relations:
+    s, p, o = relation.subject, relation.predicate, relation.object
+    
     # Look up subject in entity clusters
     if s not in entities:
       for rep, cluster in entity_clusters.items():
@@ -319,8 +321,15 @@ def cluster_graph(
         if o in cluster:
           o = rep
           break
-          
-    relations.add((s, p, o))
+    
+    # Create new relation with clustered components but preserve original metadata
+    clustered_relation = Relation(
+        subject=s,
+        predicate=p, 
+        object=o,
+        metadata=relation.metadata  # Preserve original metadata
+    )
+    relations.add(clustered_relation)
 
   return Graph(
     entities=entities,  

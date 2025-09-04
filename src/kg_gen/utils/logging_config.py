@@ -105,7 +105,7 @@ def log_operation(operation_name: str, logger: Optional[logging.Logger] = None):
             details = []
             if 'model' in kwargs:
                 details.append(f"model={kwargs['model']}")
-            if hasattr(args[0], 'model') and args[0].model:
+            if args and hasattr(args[0], 'model') and args[0].model:
                 details.append(f"model={args[0].model}")
             
             # Log start of operation

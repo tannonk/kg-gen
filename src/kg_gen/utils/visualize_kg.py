@@ -33,7 +33,8 @@ def graph_to_pyvis_data(graph: Graph):
     node_degrees = defaultdict(int)  # To calculate node sizes
 
     # Pre-calculate degrees
-    for subj, _, obj in graph.relations:
+    for relation in graph.relations:
+        subj, obj = relation.subject, relation.object
         node_degrees[subj] += 1
         node_degrees[obj] += 1
 
@@ -111,7 +112,8 @@ def graph_to_pyvis_data(graph: Graph):
             for member in members:
                 edge_member_to_rep[member] = rep
 
-        for subj, pred, obj in graph.relations:
+        for relation in graph.relations:
+            subj, pred, obj = relation.subject, relation.predicate, relation.object
             cluster_rep = edge_member_to_rep.get(pred)
             if cluster_rep:
                 color = edge_cluster_colors.get(cluster_rep, default_edge_color)
@@ -141,7 +143,8 @@ def graph_to_pyvis_data(graph: Graph):
         # No edge clustering, assign colors based on unique predicates
         unique_preds = graph.edges
         pred_colors = {pred: random_color() for pred in unique_preds}
-        for subj, pred, obj in graph.relations:
+        for relation in graph.relations:
+            subj, pred, obj = relation.subject, relation.predicate, relation.object
             color = pred_colors.get(pred, default_edge_color)
             title = f"<b>Relation:</b> {pred}"
             edges.append(

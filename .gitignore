@@ -10,3 +10,8 @@
 **build
 **.egg-info
 tests/*.html
+
+CLAUDE.md
+mlartifacts/
+mlruns/
+mydb.sqlite

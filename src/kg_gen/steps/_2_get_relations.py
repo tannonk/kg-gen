@@ -1,9 +1,10 @@
 import logging
-from typing import List, Literal
+from typing import List, Literal, Optional, Dict, Any
 import dspy
 from pydantic import BaseModel
 from ..utils.logging_config import setup_logger, log_operation
 from ..utils.usage_tracker import usage_tracker
+from ..models import Relation, Metadata
 import mlflow
 
 dspy.enable_logging()
@@ -43,18 +44,26 @@ def fallback_extraction_sig(entities, is_conversation, context: str = "") -> dsp
   
   entities_str = "\n- ".join(entities)
 
-  class Relation(BaseModel):
-    __doc__ = f"""Knowledge graph subject-predicate-object tuple. Subject and object entities must be one of: {entities_str}"""
+  class DSPyFallbackRelation(BaseModel):
+    __doc__ = f"""Knowledge graph subject-predicate-object tuple for DSPy fallback validation. Subject and object entities must be one of: {entities_str}"""
     
     subject: str
     predicate: str
     object: str
     
-  return Relation, extraction_sig(Relation, is_conversation, context)
+  return DSPyFallbackRelation, extraction_sig(DSPyFallbackRelation, is_conversation, context)
   
 @mlflow.trace
 @log_operation("Relation Extraction")
-def get_relations(dspy, input_data: str, entities: list[str], is_conversation: bool = False, context: str = "", log_level: int|str = "INFO") -> List[str]:
+def get_relations(
+    dspy, 
+    input_data: str, 
+    entities: list[str], 
+    is_conversation: bool = False, 
+    context: str = "", 
+    additional_metadata: Optional[Dict[str, Any]] = None,
+    log_level: int|str = "INFO"
+) -> List[Relation]:
   """
   Extract relations between entities from input text or conversation.
   
@@ -64,9 +73,10 @@ def get_relations(dspy, input_data: str, entities: list[str], is_conversation: b
       entities: List of entities to find relations between
       is_conversation: Whether input is a conversation format
       context: Additional context for relation extraction
+      additional_metadata: Optional key-value metadata pairs (e.g., {'source': 'file.txt'})
       
   Returns:
-      List of (subject, predicate, object) tuples
+      List of Relation objects with metadata
   """
   logger = setup_logger("kg_gen.relations", log_level=log_level)
 
@@ -77,13 +87,20 @@ def get_relations(dspy, input_data: str, entities: list[str], is_conversation: b
     logger.warning("No entities provided for relation extraction")
     return []
 
-  class Relation(BaseModel):
-    """Knowledge graph subject-predicate-object tuple."""
+  # Create base metadata for all relations from this extraction
+  # Start with provided metadata and add extraction method
+  metadata_data = additional_metadata.copy() if additional_metadata else {}
+  metadata_data['extraction_method'] = 'dspy_extraction'
+  
+  metadata = Metadata(data=metadata_data)
+
+  class DSPyRelation(BaseModel):
+    """Knowledge graph subject-predicate-object tuple for DSPy validation."""
     subject: Literal[tuple(entities)]
     predicate: str
     object: Literal[tuple(entities)]
   
-  ExtractRelations = extraction_sig(Relation, is_conversation, context)
+  ExtractRelations = extraction_sig(DSPyRelation, is_conversation, context)
   
   try:
     logger.debug("Attempting primary relation extraction")
@@ -93,14 +110,22 @@ def get_relations(dspy, input_data: str, entities: list[str], is_conversation: b
     # Track usage with the global usage tracker
     usage_tracker.track_usage(result, step="ExtractRelations", logger=logger)
 
-    relations = [(r.subject, r.predicate, r.object) for r in result.relations]
+    relations = [
+        Relation(
+            subject=r.subject, 
+            predicate=r.predicate, 
+            object=r.object,
+            metadata=metadata
+        ) 
+        for r in result.relations
+    ]
     logger.debug(f"Primary extraction successful: {len(relations)} relations found")
     return relations
   
   except Exception as e:
     logger.warning(f"Primary extraction failed ({str(e)}), using fallback approach")
     
-    Relation, ExtractRelations = fallback_extraction_sig(entities, is_conversation, context)
+    DSPyFallbackRelation, ExtractRelations = fallback_extraction_sig(entities, is_conversation, context)
     extract = dspy.Predict(ExtractRelations)
     result = extract(source_text=input_data, entities=entities)
     
@@ -111,8 +136,8 @@ def get_relations(dspy, input_data: str, entities: list[str], is_conversation: b
       
       source_text: str = dspy.InputField()
       entities: list[str] = dspy.InputField()
-      relations: list[Relation] = dspy.InputField()
-      fixed_relations: list[Relation] = dspy.OutputField()
+      relations: list[DSPyFallbackRelation] = dspy.InputField()
+      fixed_relations: list[DSPyFallbackRelation] = dspy.OutputField()
     
     fix = dspy.ChainOfThought(FixedRelations)
       
@@ -127,4 +152,12 @@ def get_relations(dspy, input_data: str, entities: list[str], is_conversation: b
         good_relations.append(rel)
     
     logger.debug(f"After fixing and filtering: {len(good_relations)} valid relations")
-    return [(r.subject, r.predicate, r.object) for r in good_relations]
+    return [
+        Relation(
+            subject=r.subject,
+            predicate=r.predicate, 
+            object=r.object,
+            metadata=metadata
+        )
+        for r in good_relations
+    ]

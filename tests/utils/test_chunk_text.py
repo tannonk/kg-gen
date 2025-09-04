@@ -1,5 +1,5 @@
 import unittest
-from src.kg_gen.utils.chunk_text import chunk_text
+from kg_gen.utils.chunk_text import chunk_text
 
 class TestChunkText(unittest.TestCase):
     def test_single_short_sentence(self):

@@ -1,12 +1,12 @@
 import pytest
-from src.kg_gen import KGGen
-from src.kg_gen.models import Graph
+from kg_gen import KGGen
+from kg_gen.models import Graph
 import dspy
 import os
 
 
 # Test configurations
-TEST_MODEL = "openai/gpt-4o"
+TEST_MODEL = "openai/gpt-4.1-nano-2025-04-14"
 TEST_TEMP = 0.2
 TEST_API_KEY = os.getenv("OPENAI_API_KEY", "dummy-key")
 

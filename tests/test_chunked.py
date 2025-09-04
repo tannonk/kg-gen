@@ -1,4 +1,4 @@
-from src.kg_gen import KGGen
+from kg_gen import KGGen
 import os
 from dotenv import load_dotenv
 
@@ -17,7 +17,7 @@ if __name__ == "__main__":
   # # Generate graph from wiki text without chunking
   graph = kg.generate(
     input_data=text,
-    model="openai/gpt-4o",
+    model="openai/gpt-4.1-nano-2025-04-14",
     api_key=os.getenv("OPENAI_API_KEY")
   )
   print("Without chunking:")
@@ -28,7 +28,7 @@ if __name__ == "__main__":
   # Generate graph from wiki text with chunking
   graph_chunked = kg.generate(
     input_data=text,
-    model="openai/gpt-4o",
+    model="openai/gpt-4.1-nano-2025-04-14",
     api_key=os.getenv("OPENAI_API_KEY"),
     chunk_size=1000
   )

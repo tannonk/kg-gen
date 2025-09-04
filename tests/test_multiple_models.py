@@ -1,4 +1,4 @@
-from src.kg_gen import KGGen
+from kg_gen import KGGen
 import os
 from dotenv import load_dotenv
 
@@ -14,7 +14,7 @@ if __name__ == "__main__":
   # Test with different models and their corresponding API keys
   model_configs = [
     {
-      "model": "openai/gpt-4o",
+      "model": "openai/gpt-4.1-nano-2025-04-14",
       "api_key": os.getenv("OPENAI_API_KEY")
     },
     {
