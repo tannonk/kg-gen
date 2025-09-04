@@ -98,20 +98,26 @@ class KGGen:
     
     self.dspy.settings.configure(track_usage=True)
 
-    if self.force:
-      # disable cache usage to ensure fresh API calls
-      self.dspy.configure_cache(
-          enable_disk_cache=False,
-          enable_memory_cache=False,
-      )
-    else:
-      # enable cache usage for improved performance
-      self.dspy.configure_cache(
-          enable_disk_cache=True,
-          enable_memory_cache=True,
-          disk_size_limit_bytes=1_000_000_000, # 1GB
-          memory_max_entries=1_000_000,
-      )
+    # Disable caching to ensure fresh API calls (necessary for iterative clustering steps)
+    self.dspy.configure_cache(
+        enable_disk_cache=False,
+        enable_memory_cache=False,
+    )
+
+    # if self.force:
+    #   # disable cache usage to ensure fresh API calls
+    #   self.dspy.configure_cache(
+    #       enable_disk_cache=False,
+    #       enable_memory_cache=False,
+    #   )
+    # else:
+    #   # enable cache usage for improved performance
+    #   self.dspy.configure_cache(
+    #       enable_disk_cache=True,
+    #       enable_memory_cache=True,
+    #       disk_size_limit_bytes=1_000_000_000, # 1GB
+    #       memory_max_entries=1_000_000,
+    #   )
     self.dspy.enable_logging()
     
     self.logger.debug("DSPy LM configuration completed")

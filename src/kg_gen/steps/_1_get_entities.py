@@ -49,7 +49,7 @@ def get_entities(dspy, input_data: str, is_conversation: bool = False, log_level
   result = extract(source_text=input_data)
   
   # Track usage with the global usage tracker
-  usage_tracker.track_usage(result, logger=logger)
+  usage_tracker.track_usage(result, step="ExtractEntities", logger=logger)
   
   entities = result.entities if result.entities else []
   logger.debug(f"Extracted {len(entities)} entities: {entities[:5]}{'...' if len(entities) > 5 else ''}")

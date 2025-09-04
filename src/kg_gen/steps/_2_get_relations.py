@@ -91,8 +91,8 @@ def get_relations(dspy, input_data: str, entities: list[str], is_conversation: b
     result = extract(source_text=input_data, entities=entities)
     
     # Track usage with the global usage tracker
-    usage_tracker.track_usage(result, logger=logger)
-    
+    usage_tracker.track_usage(result, step="ExtractRelations", logger=logger)
+
     relations = [(r.subject, r.predicate, r.object) for r in result.relations]
     logger.debug(f"Primary extraction successful: {len(relations)} relations found")
     return relations
@@ -119,7 +119,7 @@ def get_relations(dspy, input_data: str, entities: list[str], is_conversation: b
     fix_res = fix(source_text=input_data, entities=entities, relations=result.relations)
     
     # Track usage with the global usage tracker
-    usage_tracker.track_usage(fix_res, logger=logger)
+    usage_tracker.track_usage(fix_res, step="FixedRelations", logger=logger)
 
     good_relations = []
     for rel in fix_res.fixed_relations:

@@ -17,8 +17,11 @@ import logging
 
 # pricing
 MODEL_PRICING = {
+    # https://platform.openai.com/docs/pricing
     "openai/gpt-4.1-nano-2025-04-14": {"input": 0.10, "output": 0.40},
+    "openai/gpt-4.1-mini": {"input": 0.40, "output": 1.60},
     "openai/gpt-4o": {"input": 2.50, "output": 10.00},
+    "openai/gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "openai/gpt-5-nano-2025-08-07": {"input": 0.05, "output": 0.40}, # https://platform.openai.com/docs/models/gpt-5-nano
     "gemini/gemini-2.5-pro": {"input": 0.00, "output": 0.00}, # https://ai.google.dev/gemini-api/docs/pricing
     "gemini/gemini-2.5-flash": {"input": 0.00, "output": 0.00}, # https://ai.google.dev/gemini-api/docs/pricing
@@ -120,8 +123,8 @@ class UsageTracker:
         self._model_stats: Dict[str, ModelStats] = {}
         self._session_start = datetime.now()
         self._logger = logging.getLogger(__name__)
-    
-    def track_usage(self, result, model_name: Optional[str] = None, logger: Optional[logging.Logger] = None) -> None:
+
+    def track_usage(self, result, step: Optional[str] = 'UnknownStep', model_name: Optional[str] = None, logger: Optional[logging.Logger] = None) -> None:
         """
         Track usage from a DSPy result object.
         
@@ -135,7 +138,7 @@ class UsageTracker:
             
             # Log usage for backward compatibility (if logger provided)
             if logger and usage_data:
-                logger.info(f"LM Usage: {usage_data}")
+                logger.info(f"LM Usage ({step}): {usage_data}")
             
             if not usage_data:
                 return

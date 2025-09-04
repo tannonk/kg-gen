@@ -1,7 +1,7 @@
 import logging
 from ..models import Graph
 import dspy
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel
 from ..utils.logging_config import setup_logger, log_operation, ProgressTracker
 from ..utils.usage_tracker import usage_tracker
@@ -11,7 +11,6 @@ dspy.enable_logging()
 logging.getLogger("dspy").setLevel(logging.DEBUG)
 
 LOOP_N = 8 
-from typing import Literal
 BATCH_SIZE = 10
 
 ItemType = Literal["entities", "edges"]
@@ -35,11 +34,10 @@ def cluster_items(dspy, items: set[str], item_type: ItemType = "entities", conte
   """Returns item set and cluster dict mapping representatives to sets of items"""
   
   logger = setup_logger(f"kg_gen.clustering.{item_type}", log_level=log_level)
-  
   logger.info(f"Starting {item_type} clustering with {len(items)} items")
   logger.debug(f"Context: {context}")
   
-  context = f"{item_type} of a graph extracted from source text." + context
+  context = f"{item_type.upper()} of a graph extracted from source text. {context}"
   remaining_items = items.copy()
   clusters: list[Cluster] = []
   no_progress_count = 0
@@ -68,7 +66,7 @@ def cluster_items(dspy, items: set[str], item_type: ItemType = "entities", conte
       )
     
     # Track usage with the global usage tracker
-    usage_tracker.track_usage(extract_result, logger=logger)
+    usage_tracker.track_usage(extract_result, step="ExtractCluster", logger=logger)
     
     suggested_cluster: set[ItemsLiteral] = set(extract_result.cluster)
     
@@ -92,17 +90,19 @@ def cluster_items(dspy, items: set[str], item_type: ItemType = "entities", conte
         )
       
       # Track usage with the global usage tracker
-      usage_tracker.track_usage(validate_result, logger=logger)
+      usage_tracker.track_usage(validate_result, step="ValidateCluster", logger=logger)
       
       validated_cluster: set[ItemsLiteral] = set(validate_result.validated_items)
       
       if len(validated_cluster) > 1:
-        no_progress_count = 0
+        no_progress_count = 0 # Reset no-progress counter on successful clustering
         
-        representative = choose_rep(
+        representative_result = choose_rep(
           cluster=validated_cluster, 
           context=context
-        ).representative
+        )
+        usage_tracker.track_usage(representative_result, step="ChooseRepresentative", logger=logger)
+        representative = representative_result.representative
         
         clusters.append(Cluster(
           representative=representative,
@@ -116,6 +116,7 @@ def cluster_items(dspy, items: set[str], item_type: ItemType = "entities", conte
     no_progress_count += 1
     
     if no_progress_count >= LOOP_N or len(remaining_items) == 0:
+      logger.debug("No progress in clustering or no remaining items, moving to batch processing")
       break
     
   if len(remaining_items) > 0:
@@ -152,8 +153,8 @@ def cluster_items(dspy, items: set[str], item_type: ItemType = "entities", conte
       )
       
       # Track usage with the global usage tracker
-      usage_tracker.track_usage(c_result, logger=logger)
-      
+      usage_tracker.track_usage(c_result, step="CheckExistingClusters", logger=logger)
+
       cluster_reps = c_result.cluster_reps_that_items_belong_to
 
       # Map representatives to their cluster objects for easier lookup
