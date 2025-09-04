@@ -273,11 +273,15 @@ class KGGen:
     self,
     graph: Graph,
     context: str = "",
+    entity_clustering_context: str = "",
+    relation_clustering_context: str = "",
+    skip_entity_clustering: bool = False,
+    skip_relation_clustering: bool = False,
     model: str = None,
     temperature: float = None,
     api_key: str = None,
     api_base: str = None,
-    init_kwargs: dict = None,
+    max_tokens: int = None,
     log_level: int|str = "INFO"
   ) -> Graph:
     """
@@ -295,20 +299,24 @@ class KGGen:
     Returns:
         Graph with clustered entities and relations
     """
-    self.logger.info(f"Starting graph clustering with context: '{context}'")
-    
+    self.logger.info(f"Starting graph clustering...")
+
     # Reinitialize dspy with new parameters if any are provided
-    if any([model, temperature, api_key, api_base, init_kwargs]):
+    if any([model, temperature, api_key, api_base, max_tokens]):
       with log_step("Model Reconfiguration for Clustering", self.logger):
         self.init_model(
           model=model or self.model,
           temperature=temperature or self.temperature,
           api_key=api_key or self.api_key,
           api_base=api_base or self.api_base,
-          init_kwargs=init_kwargs or self.init_kwargs,
+          max_tokens=max_tokens or self.max_tokens,
         )
 
-    return cluster_graph(self.dspy, graph, context, log_level=log_level)
+    return cluster_graph(self.dspy, graph=graph, context=context, entity_cluster_context=entity_clustering_context,
+                         relation_cluster_context=relation_clustering_context,
+                         skip_entity_clustering=skip_entity_clustering,
+                         skip_relation_clustering=skip_relation_clustering,
+                         log_level=log_level)
 
   def aggregate(self, graphs: list[Graph]) -> Graph:
     """

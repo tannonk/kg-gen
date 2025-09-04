@@ -251,7 +251,16 @@ def cluster_items(dspy, items: set[str], item_type: ItemType = "entities", conte
 
 @mlflow.trace
 @log_operation("Graph Clustering") 
-def cluster_graph(dspy, graph: Graph, context: str = "", log_level: int|str = "INFO") -> Graph:
+def cluster_graph(
+  dspy, 
+  graph: Graph, 
+  context: str = "", 
+  entity_cluster_context: str = "",
+  relation_cluster_context: str = "",
+  skip_entity_clustering: bool = False,
+  skip_relation_clustering: bool = False,
+  log_level: int|str = "INFO"
+  ) -> Graph:
   """Cluster entities and edges in a graph, updating relations accordingly.
   
   Args:
@@ -262,13 +271,28 @@ def cluster_graph(dspy, graph: Graph, context: str = "", log_level: int|str = "I
   Returns:
       Graph with clustered entities and edges, updated relations, and cluster mappings
   """
+  
   logger = setup_logger("kg_gen.clustering", log_level=log_level)
   
   logger.info(f"Starting graph clustering: {len(graph.entities)} entities, {len(graph.edges)} edges, {len(graph.relations)} relations")
-  
-  entities, entity_clusters = cluster_items(dspy, graph.entities, "entities", context)
-  edges, edge_clusters = cluster_items(dspy, graph.edges, "edges", context)
-  # edges, edge_clusters = graph.edges, {e: {e} for e in graph.edges} # Skip edge clustering for now
+
+  if not skip_entity_clustering:
+    if entity_cluster_context:
+      context = entity_cluster_context
+      logger.debug(f"Using entity-specific context for entity clustering: {context}")
+    entities, entity_clusters = cluster_items(dspy, graph.entities, "entities", context)
+  else:
+    entities, entity_clusters = graph.entities, {e: {e} for e in graph.entities}
+    logger.info("Skipping entity clustering as per configuration")
+
+  if not skip_relation_clustering:
+    if relation_cluster_context:
+      context = relation_cluster_context
+      logger.debug(f"Using relation-specific context for relation clustering: {context}")
+    edges, edge_clusters = cluster_items(dspy, graph.edges, "edges", context)
+  else:
+    edges, edge_clusters = graph.edges, {e: {e} for e in graph.edges}
+    logger.info("Skipping edge clustering as per configuration")
 
   # Update relations based on clusters
   logger.debug("Updating relations based on entity and edge clusters")
