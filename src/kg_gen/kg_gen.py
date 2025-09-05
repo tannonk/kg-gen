@@ -20,7 +20,7 @@ logging.getLogger("dspy").setLevel(logging.DEBUG)
 class KGGen:
   def __init__(
     self,
-    model: str = "openai/gpt-4o",
+    model: str = "openai/gpt-4.1-nano-2025-04-14",
     temperature: float = 0.0,
     api_key: str = None,
     api_base: str = None,
@@ -118,6 +118,7 @@ class KGGen:
     #       disk_size_limit_bytes=1_000_000_000, # 1GB
     #       memory_max_entries=1_000_000,
     #   )
+
     self.dspy.enable_logging()
     
     self.logger.debug("DSPy LM configuration completed")
@@ -228,10 +229,9 @@ class KGGen:
           
           # Add chunk info to metadata
           chunk_metadata = additional_metadata.copy() if additional_metadata else {}
-          if 'source' in chunk_metadata:
-              chunk_metadata['source'] = f"{chunk_metadata['source']}:chunk_{chunk_idx}"
-          else:
-              chunk_metadata['chunk_id'] = chunk_idx
+          # chunk_metadata['source'] = f"{chunk_metadata['source']}"
+          chunk_metadata['chunk_id'] = chunk_idx
+          chunk_metadata['chunk_text'] = chunk
           
           chunk_entities = get_entities(self.dspy, chunk, is_conversation=is_conversation, log_level=self.logger.level)
           chunk_relations = get_relations(
