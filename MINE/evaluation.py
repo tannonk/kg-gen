@@ -23,7 +23,11 @@ def load_graph_from_json(file_path):
 
     # Add relationships (edges)
     for relation in data["relations"]:
-        source, rel, target = relation
+        # Handle both new dictionary format and old tuple format
+        if isinstance(relation, dict):
+            source, rel, target = relation["subject"], relation["predicate"], relation["object"]
+        else:
+            source, rel, target = relation
         G.add_edge(source, target, relation=rel)
 
     return G
