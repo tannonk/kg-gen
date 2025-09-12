@@ -66,14 +66,14 @@ class Relation(BaseModel):
         metadata=merged
     )
 
-  def _merge_sources(self, source1: Optional[str], source2: Optional[str]) -> Optional[str]:
+  def _merge_sources(self, source1: Optional[str], source2: Optional[str]) -> Optional[list[str]]:
     """Merge source metadata - combine into comma-separated list"""
     sources = [s for s in [source1, source2] if s is not None]
     if not sources:
         return None
     # Deduplicate and sort for consistent ordering
     unique_sources = sorted(set(sources))
-    return ", ".join(unique_sources)
+    return unique_sources
 
 class Graph(BaseModel):
   entities: set[str] = Field(..., description="All entities including additional ones from response")
