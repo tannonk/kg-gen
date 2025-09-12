@@ -41,7 +41,7 @@ class KGFormatter(logging.Formatter):
         # Handle different record types
         if hasattr(record, "operation"):
             # LLM operation log
-            base_msg = f"[{formatted_time}] {colored_levelname:8} | {record.operation}"
+            base_msg = f"KG-Gen [{formatted_time}] | {colored_levelname:8} | {record.operation}"
             if hasattr(record, "duration"):
                 base_msg += f" ({record.duration:.2f}s)"
             if hasattr(record, "details"):
@@ -49,10 +49,10 @@ class KGFormatter(logging.Formatter):
             return base_msg
         elif hasattr(record, "step"):
             # Pipeline step log
-            return f"[{formatted_time}] {colored_levelname:8} | Step: {record.step} | {record.getMessage()}"
+            return f"KG-Gen [{formatted_time}] {colored_levelname:8} | Step: {record.step} | {record.getMessage()}"
         else:
             # Standard log
-            return f"[{formatted_time}] {colored_levelname:8} | {record.getMessage()}"
+            return f"KG-Gen [{formatted_time}] {colored_levelname:8} | {record.getMessage()}"
 
 
 def setup_logger(name: str = "kg_gen", log_level: int | str = "INFO") -> logging.Logger:

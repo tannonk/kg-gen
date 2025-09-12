@@ -241,7 +241,7 @@ class KGGen:
                         self.dspy,
                         processed_input,
                         is_conversation=is_conversation,
-                        log_level=self.logger.level,
+                        logger=self.logger,
                     )
                     self.logger.info(f"Extracted {len(entities)} entities")
 
@@ -252,7 +252,7 @@ class KGGen:
                         entities,
                         is_conversation=is_conversation,
                         additional_metadata=additional_metadata,
-                        log_level=self.logger.level,
+                        logger=self.logger,
                     )
                     self.logger.info(f"Extracted {len(relations)} relations")
             else:
@@ -284,7 +284,7 @@ class KGGen:
                         self.dspy,
                         chunk,
                         is_conversation=is_conversation,
-                        log_level=self.logger.level,
+                        logger=self.logger,
                     )
                     chunk_relations = get_relations(
                         self.dspy,
@@ -292,7 +292,7 @@ class KGGen:
                         chunk_entities,
                         is_conversation=is_conversation,
                         additional_metadata=chunk_metadata,
-                        log_level=self.logger.level,
+                        logger=self.logger,
                     )
                     return chunk_entities, chunk_relations
 
@@ -328,7 +328,7 @@ class KGGen:
             # Optional clustering step
             if cluster:
                 with log_step("Graph Clustering", self.logger):
-                    graph = self.cluster(graph, context, log_level=self.logger.level)
+                    graph = self.cluster(graph, context, logger=self.logger)
                     log_graph_stats(graph, "Clustered", self.logger)
 
             # Optional output saving
@@ -371,7 +371,7 @@ class KGGen:
         api_key: str = None,
         api_base: str = None,
         max_tokens: int = None,
-        log_level: int | str = "INFO",
+        logger: logging.Logger = None,
     ) -> Graph:
         """
         Cluster entities and relations in a knowledge graph for deduplication.
@@ -401,6 +401,9 @@ class KGGen:
                     max_tokens=max_tokens or self.max_tokens,
                 )
 
+        # Use provided logger or fall back to self.logger
+        cluster_logger = logger or self.logger
+        
         return cluster_graph(
             self.dspy,
             graph=graph,
@@ -409,7 +412,7 @@ class KGGen:
             relation_cluster_context=relation_clustering_context,
             skip_entity_clustering=skip_entity_clustering,
             skip_relation_clustering=skip_relation_clustering,
-            log_level=log_level,
+            logger=cluster_logger,
         )
 
     def aggregate(self, graphs: list[Graph]) -> Graph:

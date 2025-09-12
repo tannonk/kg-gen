@@ -28,7 +28,7 @@ class ConversationEntities(dspy.Signature):
 @mlflow.trace
 @log_operation("Entity Extraction")
 def get_entities(
-    dspy, input_data: str, is_conversation: bool = False, log_level: int | str = "INFO"
+    dspy, input_data: str, is_conversation: bool = False, logger: logging.Logger = None
 ) -> List[str]:
     """
     Extract entities from input text or conversation.
@@ -37,11 +37,13 @@ def get_entities(
         dspy: DSPy runtime instance
         input_data: Text or conversation to process
         is_conversation: Whether input is a conversation format
+        logger: Logger instance to use for logging
 
     Returns:
         List of extracted entity strings
     """
-    logger = setup_logger("kg_gen.entities", log_level=log_level)
+    if logger is None:
+        logger = setup_logger("kg_gen.entities")
 
     input_type = "conversation" if is_conversation else "text"
     logger.debug(f"Extracting entities from {input_type} ({len(input_data)} chars)")

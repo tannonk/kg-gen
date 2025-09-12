@@ -39,11 +39,12 @@ def cluster_items(
     items: set[str],
     item_type: ItemType = "entities",
     context: str = "",
-    log_level: int | str = "INFO",
+    logger: logging.Logger = None,
 ) -> tuple[set[str], dict[str, set[str]]]:
     """Returns item set and cluster dict mapping representatives to sets of items"""
 
-    logger = setup_logger(f"kg_gen.clustering.{item_type}", log_level=log_level)
+    if logger is None:
+        logger = setup_logger(f"kg_gen.clustering.{item_type}")
     logger.info(f"Starting {item_type} clustering with {len(items)} items")
     logger.debug(f"Context: {context}")
 
@@ -304,7 +305,7 @@ def cluster_graph(
     relation_cluster_context: str = "",
     skip_entity_clustering: bool = False,
     skip_relation_clustering: bool = False,
-    log_level: int | str = "INFO",
+    logger: logging.Logger = None,
 ) -> Graph:
     """Cluster entities and edges in a graph, updating relations accordingly.
 
@@ -312,12 +313,14 @@ def cluster_graph(
         dspy: The DSPy runtime
         graph: Input graph with entities, edges, and relations
         context: Additional context string for clustering
+        logger: Logger instance to use for logging
 
     Returns:
         Graph with clustered entities and edges, updated relations, and cluster mappings
     """
 
-    logger = setup_logger("kg_gen.clustering", log_level=log_level)
+    if logger is None:
+        logger = setup_logger("kg_gen.clustering")
 
     logger.info(
         f"Starting graph clustering: {len(graph.entities)} entities, {len(graph.edges)} edges, {len(graph.relations)} relations"
@@ -330,7 +333,7 @@ def cluster_graph(
                 f"Using entity-specific context for entity clustering: {context}"
             )
         entities, entity_clusters = cluster_items(
-            dspy, graph.entities, "entities", context
+            dspy, graph.entities, "entities", context, logger=logger
         )
     else:
         entities, entity_clusters = graph.entities, {e: {e} for e in graph.entities}
@@ -342,7 +345,7 @@ def cluster_graph(
             logger.debug(
                 f"Using relation-specific context for relation clustering: {context}"
             )
-        edges, edge_clusters = cluster_items(dspy, graph.edges, "edges", context)
+        edges, edge_clusters = cluster_items(dspy, graph.edges, "edges", context, logger=logger)
     else:
         edges, edge_clusters = graph.edges, {e: {e} for e in graph.edges}
         logger.info("Skipping edge clustering as per configuration")

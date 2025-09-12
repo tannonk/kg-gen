@@ -75,7 +75,7 @@ def get_relations(
     is_conversation: bool = False,
     context: str = "",
     additional_metadata: Optional[Dict[str, Any]] = None,
-    log_level: int | str = "INFO",
+    logger: logging.Logger = None,
 ) -> List[Relation]:
     """
     Extract relations between entities from input text or conversation.
@@ -87,11 +87,13 @@ def get_relations(
         is_conversation: Whether input is a conversation format
         context: Additional context for relation extraction
         additional_metadata: Optional key-value metadata pairs (e.g., {'source': 'file.txt'})
+        logger: Logger instance to use for logging
 
     Returns:
         List of Relation objects with metadata
     """
-    logger = setup_logger("kg_gen.relations", log_level=log_level)
+    if logger is None:
+        logger = setup_logger("kg_gen.relations")
 
     input_type = "conversation" if is_conversation else "text"
     logger.debug(
