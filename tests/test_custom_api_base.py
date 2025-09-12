@@ -1,6 +1,9 @@
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # uncomment this line if you clone the repo package instead of using pip install
+
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)  # uncomment this line if you clone the repo package instead of using pip install
 from kg_gen import KGGen
 from dotenv import load_dotenv
 
@@ -9,19 +12,21 @@ API_BASE = os.getenv("API_BASE")
 
 
 if __name__ == "__main__":
-  # Load environment variables
-  load_dotenv()
+    # Load environment variables
+    load_dotenv()
 
-  # Example usage
-  kg = KGGen(api_key=OPENAI_API_KEY, api_base=API_BASE, model = "gpt-4.1-nano-2025-04-14-mini")
+    # Example usage
+    kg = KGGen(
+        api_key=OPENAI_API_KEY, api_base=API_BASE, model="gpt-4.1-nano-2025-04-14-mini"
+    )
 
-  # Generate a simple graph
-  text = "Harry has two parents - his dad James Potter and his mom Lily Potter. Harry and his wife Ginny have three kids together: their oldest son James Sirius, their other son Albus, and their daughter Lily Luna."
+    # Generate a simple graph
+    text = "Harry has two parents - his dad James Potter and his mom Lily Potter. Harry and his wife Ginny have three kids together: their oldest son James Sirius, their other son Albus, and their daughter Lily Luna."
 
-  graph = kg.generate(
-    input_data=text,
-    api_key=OPENAI_API_KEY, 
-    api_base=API_BASE,
-    model="gpt-4.1-nano-2025-04-14-mini",
-  )
-  print(graph)
+    graph = kg.generate(
+        input_data=text,
+        api_key=OPENAI_API_KEY,
+        api_base=API_BASE,
+        model="gpt-4.1-nano-2025-04-14-mini",
+    )
+    print(graph)

@@ -1,6 +1,7 @@
 import unittest
 from kg_gen.utils.chunk_text import chunk_text
 
+
 class TestChunkText(unittest.TestCase):
     def test_single_short_sentence(self):
         """Test that a single short sentence fits in one chunk."""
@@ -52,21 +53,22 @@ class TestChunkText(unittest.TestCase):
         # If your chunk_text keeps the final period in the last chunk, adjust accordingly.
         self.assertIn("word", combined)
         # We might also want to check the count of 'word' is correct
-        # but that requires carefully handling the punctuation. 
+        # but that requires carefully handling the punctuation.
         # This minimal check ensures fallback at least happened.
 
     def test_mixed_scenario(self):
         """Test a mix of short and long sentences in the same text."""
         text = (
-            "Short sentence. " 
-            + " ".join(["longword"] * 30) + ". "  # One long sentence
+            "Short sentence. "
+            + " ".join(["longword"] * 30)
+            + ". "  # One long sentence
             + "Another short sentence."
         )
         max_size = 50
         result = chunk_text(text, max_chunk_size=max_size)
 
         # We expect at least 3 chunks:
-        #   1) "Short sentence." 
+        #   1) "Short sentence."
         #   2) The long sentence split by words
         #   3) "Another short sentence."
         self.assertTrue(len(result) >= 3)
@@ -80,6 +82,7 @@ class TestChunkText(unittest.TestCase):
 
         # Check the last chunk contains "Another short sentence."
         self.assertTrue("Another short sentence." in result[-1])
+
 
 if __name__ == "__main__":
     unittest.main()
