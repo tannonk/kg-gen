@@ -371,6 +371,9 @@ class KGGen:
         api_key: str = None,
         api_base: str = None,
         max_tokens: int = None,
+        loop_n: int = 4,
+        max_iter: int = 100,
+        batch_size: int = 10,
         logger: logging.Logger = None,
     ) -> Graph:
         """
@@ -412,6 +415,9 @@ class KGGen:
             relation_cluster_context=relation_clustering_context,
             skip_entity_clustering=skip_entity_clustering,
             skip_relation_clustering=skip_relation_clustering,
+            loop_n=loop_n,
+            max_iter=max_iter,
+            batch_size=batch_size,
             logger=cluster_logger,
         )
 

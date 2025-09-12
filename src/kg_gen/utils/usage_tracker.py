@@ -148,6 +148,7 @@ class UsageTracker:
         step: Optional[str] = "UnknownStep",
         model_name: Optional[str] = None,
         logger: Optional[logging.Logger] = None,
+        verbose: bool = False,
     ) -> None:
         """
         Track usage from a DSPy result object.
@@ -163,8 +164,8 @@ class UsageTracker:
             )
 
             # Log usage for backward compatibility (if logger provided)
-            if logger and usage_data:
-                logger.info(f"LM Usage ({step}): {usage_data}")
+            if verbose and logger and usage_data:
+                logger.debug(f"LM Usage ({step}): {usage_data}")
 
             if not usage_data:
                 return
@@ -210,12 +211,23 @@ class UsageTracker:
         with self._stats_lock:
             if not self._model_stats:
                 return {}
-
+            
             total_calls = sum(stats.total_calls for stats in self._model_stats.values())
+            
             total_tokens = sum(
                 stats.total_tokens for stats in self._model_stats.values()
             )
+            
+            total_prompt_tokens = sum(
+                stats.total_prompt_tokens for stats in self._model_stats.values()
+            )
+            
+            total_completion_tokens = sum(
+                stats.total_completion_tokens for stats in self._model_stats.values()
+            )
+            
             total_cost = sum(stats.total_cost for stats in self._model_stats.values())
+            
             total_errors = sum(stats.errors for stats in self._model_stats.values())
 
             # Calculate time span
@@ -224,6 +236,7 @@ class UsageTracker:
                 for stats in self._model_stats.values()
                 if stats.first_call_time
             ]
+            
             all_last_times = [
                 stats.last_call_time
                 for stats in self._model_stats.values()
@@ -238,6 +251,8 @@ class UsageTracker:
                 "total_models": len(self._model_stats),
                 "total_calls": total_calls,
                 "total_tokens": total_tokens,
+                "total_prompt_tokens": total_prompt_tokens,
+                "total_completion_tokens": total_completion_tokens,
                 "total_cost": total_cost,
                 "total_errors": total_errors,
                 "first_call": first_call.isoformat() if first_call else None,
@@ -293,8 +308,8 @@ class UsageTracker:
             for stats in self.get_all_stats().values():
                 row = stats.to_dict()
                 writer.writerow(row)
-
-    def get_summary(self) -> str:
+    
+    def get_summary(self, final: bool = False) -> str:
         """Get human-readable summary of usage statistics."""
         aggregate = self.get_aggregate_stats()
         model_stats = self.get_all_stats()
@@ -302,39 +317,44 @@ class UsageTracker:
         if not aggregate:
             return "No usage data tracked."
 
-        lines = [
-            "=== KG-Gen Usage Summary ===",
-            f"Session Duration: {aggregate.get('duration_seconds', 0):.1f} seconds",
-            f"Total Models Used: {aggregate['total_models']}",
-            f"Total API Calls: {aggregate['total_calls']}",
-            f"Total Tokens: {aggregate['total_tokens']:,}",
-            f"Total Cost: ${aggregate['total_cost']:.4f}",
-            "",
-        ]
+        summary = f"Time: {aggregate.get('duration_seconds', 0):.1f} " \
+            f"| Calls: {aggregate['total_calls']}, " \
+            f"| Tokens: in={aggregate['total_prompt_tokens']}, out={aggregate['total_completion_tokens']} " \
+            f"| Cost: ${aggregate['total_cost']:.4f}"
 
-        if model_stats:
-            lines.append("Per-Model Breakdown:")
-            for model_name, stats in model_stats.items():
-                # Determine if cost is estimated or provided
-                has_pricing = model_name in MODEL_PRICING
-                cost_note = " (estimated)" if has_pricing else ""
+        return summary
+        # lines = [
+        #     "Usage Summary:",
+        #     f"Wall Time: {aggregate.get('duration_seconds', 0):.1f} seconds",
+        #     f"Running API Calls: {aggregate['total_calls']}",
+        #     f"Running Tokens: {aggregate['total_tokens']:,}",
+        #     f"Running Cost: ${aggregate['total_cost']:.4f}",
+        #     "",
+        # ]
 
-                lines.extend(
-                    [
-                        f"  {model_name}:",
-                        f"    Calls: {stats.total_calls}",
-                        f"    Tokens: {stats.total_tokens:,} (prompt: {stats.total_prompt_tokens:,}, completion: {stats.total_completion_tokens:,})",
-                        f"    Cost: ${stats.total_cost:.4f}{cost_note}",
-                        "",
-                    ]
-                )
+        # if model_stats:
+        #     lines.append("Per-Model Breakdown:")
+        #     for model_name, stats in model_stats.items():
+        #         # Determine if cost is estimated or provided
+        #         has_pricing = model_name in MODEL_PRICING
+        #         cost_note = " (estimated)" if has_pricing else ""
 
-        return "\n".join(lines)
+        #         lines.extend(
+        #             [
+        #                 f"  {model_name}:",
+        #                 f"    Calls: {stats.total_calls}",
+        #                 f"    Tokens: {stats.total_tokens:,} (prompt: {stats.total_prompt_tokens:,}, completion: {stats.total_completion_tokens:,})",
+        #                 f"    Cost: ${stats.total_cost:.4f}{cost_note}",
+        #                 "",
+        #             ]
+        #         )
+
+        # return "\n".join(lines)
 
     def log_summary(self, logger: Optional[logging.Logger] = None) -> None:
         """Log usage summary."""
         target_logger = logger or self._logger
-        target_logger.info(f"\n{self.get_summary()}")
+        target_logger.info(f"{self.get_summary()}")
 
 
 def get_model_pricing_info() -> Dict[str, Dict[str, float]]:

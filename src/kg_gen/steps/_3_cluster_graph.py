@@ -10,8 +10,7 @@ import mlflow
 dspy.enable_logging()
 logging.getLogger("dspy").setLevel(logging.DEBUG)
 
-LOOP_N = 8
-BATCH_SIZE = 10
+
 
 ItemType = Literal["entities", "edges"]
 
@@ -39,25 +38,41 @@ def cluster_items(
     items: set[str],
     item_type: ItemType = "entities",
     context: str = "",
+    loop_n: int = 4,
+    max_iter: int = 100,
+    batch_size: int = 10,
     logger: logging.Logger = None,
 ) -> tuple[set[str], dict[str, set[str]]]:
     """Returns item set and cluster dict mapping representatives to sets of items"""
-
+    
     if logger is None:
         logger = setup_logger(f"kg_gen.clustering.{item_type}")
+    
     logger.info(f"Starting {item_type} clustering with {len(items)} items")
-    logger.debug(f"Context: {context}")
+    
+    if not context:
+        logger.warning("No context provided for clustering, results may be poor!")
+    
+    # Provide minimal context if none given
+    context = f"{item_type.upper()} of a graph extracted from source text.\n\n{context}"
 
-    context = f"{item_type.upper()} of a graph extracted from source text. {context}"
     remaining_items = items.copy()
     clusters: list[Cluster] = []
     no_progress_count = 0
+    iter_count = 0
 
-    logger.debug(f"Starting iterative clustering with max {LOOP_N} loops")
+    logger.debug(f"Starting iterative clustering with max {loop_n} loops")
 
     while len(remaining_items) > 0:
+        iter_count += 1
+        if iter_count >= max_iter:
+            logger.warning(
+                f"Reached maximum iterations ({max_iter}) without completing clustering. Proceeding with current clusters."
+            )
+            break
+        
         logger.debug(
-            f"Clustering iteration: {len(remaining_items)} items remaining, {len(clusters)} clusters formed"
+            f"Clustering iteration {iter_count}/{max_iter}: {len(remaining_items)} items remaining, {len(clusters)} clusters formed"
         )
 
         ItemsLiteral = Literal[tuple(items)]
@@ -77,7 +92,6 @@ def cluster_items(
 
         extract_result = extract(items=remaining_items, context=context)
 
-        # Track usage with the global usage tracker
         usage_tracker.track_usage(extract_result, step="ExtractCluster", logger=logger)
 
         suggested_cluster: set[ItemsLiteral] = set(extract_result.cluster)
@@ -102,7 +116,6 @@ def cluster_items(
 
             validate_result = validate(cluster=suggested_cluster, context=context)
 
-            # Track usage with the global usage tracker
             usage_tracker.track_usage(
                 validate_result, step="ValidateCluster", logger=logger
             )
@@ -136,20 +149,20 @@ def cluster_items(
 
         no_progress_count += 1
 
-        if no_progress_count >= LOOP_N or len(remaining_items) == 0:
+        if no_progress_count >= loop_n or len(remaining_items) == 0:
             logger.debug(
                 "No progress in clustering or no remaining items, moving to batch processing"
             )
             break
-
+    
     if len(remaining_items) > 0:
         logger.debug(
-            f"Processing {len(remaining_items)} remaining items in batches of {BATCH_SIZE}"
+            f"Processing {len(remaining_items)} remaining items in batches of {batch_size}"
         )
         items_to_process = list(remaining_items)
 
-        for i in range(0, len(items_to_process), BATCH_SIZE):
-            batch = items_to_process[i : min(i + BATCH_SIZE, len(items_to_process))]
+        for i in range(0, len(items_to_process), batch_size):
+            batch = items_to_process[i : min(i + batch_size, len(items_to_process))]
             BatchLiteral = Literal[tuple(batch)]
 
             if not clusters:
@@ -178,7 +191,6 @@ def cluster_items(
 
             c_result = check_existing(items=batch, clusters=clusters, context=context)
 
-            # Track usage with the global usage tracker
             usage_tracker.track_usage(
                 c_result, step="CheckExistingClusters", logger=logger
             )
@@ -305,6 +317,9 @@ def cluster_graph(
     relation_cluster_context: str = "",
     skip_entity_clustering: bool = False,
     skip_relation_clustering: bool = False,
+    loop_n: int = 4,
+    max_iter: int = 100,
+    batch_size: int = 10,
     logger: logging.Logger = None,
 ) -> Graph:
     """Cluster entities and edges in a graph, updating relations accordingly.
@@ -318,7 +333,7 @@ def cluster_graph(
     Returns:
         Graph with clustered entities and edges, updated relations, and cluster mappings
     """
-
+    
     if logger is None:
         logger = setup_logger("kg_gen.clustering")
 
@@ -327,25 +342,31 @@ def cluster_graph(
     )
 
     if not skip_entity_clustering:
-        if entity_cluster_context:
-            context = entity_cluster_context
-            logger.debug(
-                f"Using entity-specific context for entity clustering: {context}"
-            )
         entities, entity_clusters = cluster_items(
-            dspy, graph.entities, "entities", context, logger=logger
+            dspy, 
+            graph.entities, 
+            "entities", 
+            context=entity_cluster_context or context, 
+            loop_n=loop_n,
+            max_iter=max_iter,
+            batch_size=batch_size,
+            logger=logger
         )
     else:
         entities, entity_clusters = graph.entities, {e: {e} for e in graph.entities}
         logger.info("Skipping entity clustering as per configuration")
 
     if not skip_relation_clustering:
-        if relation_cluster_context:
-            context = relation_cluster_context
-            logger.debug(
-                f"Using relation-specific context for relation clustering: {context}"
-            )
-        edges, edge_clusters = cluster_items(dspy, graph.edges, "edges", context, logger=logger)
+        edges, edge_clusters = cluster_items(
+            dspy, 
+            graph.edges, 
+            "edges", 
+            context=relation_cluster_context or context, 
+            loop_n=loop_n,
+            max_iter=max_iter,
+            batch_size=batch_size,
+            logger=logger
+        )
     else:
         edges, edge_clusters = graph.edges, {e: {e} for e in graph.edges}
         logger.info("Skipping edge clustering as per configuration")
