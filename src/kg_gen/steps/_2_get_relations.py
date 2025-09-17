@@ -4,7 +4,7 @@ import dspy
 from pydantic import BaseModel
 from ..utils.logging_config import setup_logger, log_operation
 from ..utils.usage_tracker import usage_tracker
-from ..models import Relation, Metadata
+from ..models import Relation, Metadata, Entity
 import mlflow
 
 dspy.enable_logging()
@@ -22,7 +22,7 @@ def extraction_sig(
       This is for an extraction task, please be thorough, accurate, and faithful to the reference text. {context}"""
 
             source_text: str = dspy.InputField()
-            entities: list[str] = dspy.InputField()
+            entities: list[Entity] = dspy.InputField()
             relations: list[Relation] = dspy.OutputField(
                 desc="List of subject-predicate-object tuples. Be thorough."
             )
@@ -39,7 +39,7 @@ def extraction_sig(
       This is for an extraction task, please be thorough, accurate, and faithful to the reference text. {context}"""
 
             source_text: str = dspy.InputField()
-            entities: list[str] = dspy.InputField()
+            entities: list[Entity] = dspy.InputField()
             relations: list[Relation] = dspy.OutputField(
                 desc="List of subject-predicate-object tuples where subject and object are exact matches to items in entities list. Be thorough"
             )
@@ -71,7 +71,7 @@ def fallback_extraction_sig(
 def get_relations(
     dspy,
     input_data: str,
-    entities: list[str],
+    entities: list[Entity],
     is_conversation: bool = False,
     context: str = "",
     additional_metadata: Optional[Dict[str, Any]] = None,
@@ -114,9 +114,9 @@ def get_relations(
     class DSPyRelation(BaseModel):
         """Knowledge graph subject-predicate-object tuple for DSPy validation."""
 
-        subject: Literal[tuple(entities)]
+        subject: str
         predicate: str
-        object: Literal[tuple(entities)]
+        object: str
 
     ExtractRelations = extraction_sig(DSPyRelation, is_conversation, context)
 
@@ -157,7 +157,7 @@ def get_relations(
             """Fix the relations so that every subject and object of the relations are exact matches to an entity. Keep the predicate the same. The meaning of every relation should stay faithful to the reference text. If you cannot maintain the meaning of the original relation relative to the source text, then do not return it."""
 
             source_text: str = dspy.InputField()
-            entities: list[str] = dspy.InputField()
+            entities: list[Entity] = dspy.InputField()
             relations: list[DSPyFallbackRelation] = dspy.InputField()
             fixed_relations: list[DSPyFallbackRelation] = dspy.OutputField()
 

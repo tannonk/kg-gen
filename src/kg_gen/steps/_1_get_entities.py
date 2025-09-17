@@ -3,6 +3,7 @@ from typing import List
 import dspy
 from ..utils.logging_config import setup_logger, log_operation
 from ..utils.usage_tracker import usage_tracker
+from ..models import Entity
 import mlflow
 
 logging.getLogger("dspy").setLevel(logging.DEBUG)
@@ -10,10 +11,11 @@ logging.getLogger("dspy").setLevel(logging.DEBUG)
 
 class TextEntities(dspy.Signature):
     """Extract key entities from the source text. Extracted entities are subjects or objects.
-    This is for an extraction task, please be THOROUGH and accurate to the reference text."""
+    This is for an extraction task, please be THOROUGH and accurate to the reference text.
+    For each entity, provide its name, a categorical entity type label (e.g., Person, Organization, etc.), and a brief factual description."""
 
     source_text: str = dspy.InputField()
-    entities: list[str] = dspy.OutputField(desc="THOROUGH list of key entities")
+    entities: list[Entity] = dspy.OutputField(desc="THOROUGH list of key entities with type labels and descriptions")
 
 
 class ConversationEntities(dspy.Signature):

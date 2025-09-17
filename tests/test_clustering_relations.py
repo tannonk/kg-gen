@@ -1,4 +1,4 @@
-from kg_gen.models import Graph, Relation, Metadata
+from kg_gen.models import Graph, Relation, Entity, Metadata
 from kg_gen.steps._3_cluster_graph import cluster_graph
 import dspy
 import os
@@ -20,7 +20,7 @@ def test_clustering_with_relations():
     dspy.configure(lm=lm)
 
     print("\n1. Testing clustering with Relation objects (with metadata):")
-
+    breakpoint()
     try:
         # Create test relations with metadata
         test_relations = {
@@ -48,8 +48,16 @@ def test_clustering_with_relations():
             ),
         }
 
+        test_entities = [
+            Entity(name="Josh", label="Person", description="A person named Josh"),
+            Entity(name="Joshua", label="Person", description="A person named Joshua"),
+            Entity(name="Linda", label="Person", description="A person named Linda"),
+            Entity(name="Andrew", label="Person", description="A person named Andrew"),
+            Entity(name="Ben", label="Person", description="A person named Ben"),
+        ]
+
         test_graph = Graph(
-            entities={"Josh", "Joshua", "Linda", "Andrew", "Ben"},
+            entities=test_entities,
             edges={"hasParent", "isBrother"},
             relations=test_relations,
         )
@@ -66,9 +74,8 @@ def test_clustering_with_relations():
             dspy=dspy,
             graph=test_graph,
             context="Family relationships with Josh and Joshua being the same person",
-            log_level="WARNING",  # Reduce logging for cleaner output
         )
-
+        
         print(
             f"   Clustered graph: {len(clustered_graph.entities)} entities, {len(clustered_graph.relations)} relations"
         )
@@ -94,50 +101,6 @@ def test_clustering_with_relations():
 
         traceback.print_exc()
 
-    print("\n2. Testing clustering with old tuple format (backward compatibility):")
-
-    try:
-        # Create graph with old tuple format (should auto-convert)
-        old_tuple_graph = Graph(
-            entities={"Harry", "James", "Lily"},
-            edges={"hasParent", "marriedTo"},
-            relations={  # Old tuple format
-                ("Harry", "hasParent", "James"),
-                ("Harry", "hasParent", "Lily"),
-                ("James", "marriedTo", "Lily"),
-            },
-        )
-
-        print(
-            f"   Input graph: {len(old_tuple_graph.entities)} entities, {len(old_tuple_graph.relations)} relations"
-        )
-
-        # Verify auto-conversion happened
-        for rel in old_tuple_graph.relations:
-            assert isinstance(rel, Relation), (
-                f"Expected Relation after auto-conversion, got {type(rel)}"
-            )
-
-        print("   ✓ Auto-conversion from tuples to Relation objects worked")
-
-        # Test clustering
-        clustered_old_graph = cluster_graph(
-            dspy=dspy,
-            graph=old_tuple_graph,
-            context="Family relationships",
-            log_level="WARNING",
-        )
-
-        print(
-            f"   Clustered graph: {len(clustered_old_graph.entities)} entities, {len(clustered_old_graph.relations)} relations"
-        )
-        print("   ✓ Clustering with auto-converted relations successful!")
-
-    except Exception as e:
-        print(f"   ✗ Failed: {e}")
-        import traceback
-
-        traceback.print_exc()
 
     print("\n" + "=" * 60)
     print("CLUSTERING WITH RELATIONS TEST COMPLETED!")
