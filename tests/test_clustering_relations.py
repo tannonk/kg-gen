@@ -70,6 +70,7 @@ def test_clustering_with_relations():
         )
 
         # Test clustering (this should now work without tuple unpacking errors)
+        
         clustered_graph = cluster_graph(
             dspy=dspy,
             graph=test_graph,

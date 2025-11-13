@@ -44,7 +44,36 @@ class Entity(BaseModel):
             "metadata": self.metadata.data,
         }
 
+class Edge(BaseModel):
+    """Basic edge with optional metadata"""
 
+    name: str
+    label: Optional[str] = None
+    description: Optional[str] = None
+    metadata: Metadata = Field(default_factory=Metadata)
+
+    class Config:
+        # Allow hashing and make it JSON serializable
+        frozen = True
+
+    def __hash__(self):
+        """Hash based on name, label, and description only, not metadata"""
+        return hash((self.name, self.label, self.description))
+
+    def __eq__(self, other):
+        """Equality based on name and label only, not metadata"""
+        if not isinstance(other, Edge):
+            return False
+        return (self.name, self.label) == (other.name, other.label)
+
+    def model_dump(self, **kwargs):
+        """Custom serialization for JSON compatibility"""
+        return {
+            "name": self.name,
+            "label": self.label,
+            "description": self.description,
+            "metadata": self.metadata.data,
+        }
 
 class Relation(BaseModel):
     """Enhanced relation with metadata support"""
